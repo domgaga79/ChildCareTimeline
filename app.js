@@ -173,16 +173,7 @@ form.addEventListener('submit', event => {
     message.textContent = 'Informe uma data e hora válidas.';
     return;
   }
-  if (dateTime.getTime() > Date.now()) {
-    message.textContent = 'A transição não pode estar no futuro.';
-    return;
-  }
-
   const events = readEvents();
-  if (events.some(item => Date.parse(item.at) === dateTime.getTime())) {
-    message.textContent = 'Já existe uma transição registrada nesse mesmo minuto.';
-    return;
-  }
 
   events.push({
     id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
