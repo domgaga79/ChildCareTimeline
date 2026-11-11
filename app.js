@@ -9,6 +9,10 @@ const ENVIRONMENTS = [
 ];
 
 const STORAGE_KEY = 'tempo-por-ambiente.events.v1';
+const BACKUP_FORMAT = 'ChildCareTimelineBackup';
+const BACKUP_VERSION = 1;
+const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+
 const form = document.querySelector('#transition-form');
 const environmentInput = document.querySelector('#environment');
 const dateInput = document.querySelector('#date');
@@ -19,6 +23,10 @@ const reportPeriod = document.querySelector('#report-period');
 const reportResults = document.querySelector('#report-results');
 const eventList = document.querySelector('#event-list');
 const eventCount = document.querySelector('#event-count');
+const backupButton = document.querySelector('#export-backup');
+const importButton = document.querySelector('#import-backup');
+const importInput = document.querySelector('#backup-file');
+const backupMessage = document.querySelector('#backup-message');
 
 function localDateTimeParts(date = new Date()) {
   const pad = value => String(value).padStart(2, '0');
@@ -38,7 +46,8 @@ function readEvents() {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     return Array.isArray(value) ? value.filter(event =>
-      event && typeof event.id === 'string' && ENVIRONMENTS.some(env => env.id === event.environment) &&
+      event && typeof event.id === 'string' &&
+      ENVIRONMENTS.some(env => env.id === event.environment) &&
       Number.isFinite(Date.parse(event.at))
     ) : [];
   } catch (error) {
@@ -158,6 +167,84 @@ function render() {
   renderReport(events);
 }
 
+function exportBackup() {
+  const payload = {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    events: readEvents()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `childcaretimeline-backup-${localDateTimeParts().date}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  backupMessage.textContent = `${payload.events.length} registros exportados. Guarde o arquivo em local seguro.`;
+}
+
+function validateBackup(payload) {
+  if (!payload || payload.format !== BACKUP_FORMAT ||
+      payload.version !== BACKUP_VERSION || !Array.isArray(payload.events) ||
+      payload.events.length > 100000) {
+    throw new Error('Arquivo de backup inválido ou versão não compatível.');
+  }
+
+  const seenIds = new Set();
+  return payload.events.filter(event => {
+    if (!event || typeof event.id !== 'string' || !event.id ||
+        !ENVIRONMENTS.some(environment => environment.id === event.environment) ||
+        typeof event.at !== 'string' || !Number.isFinite(Date.parse(event.at)) ||
+        (event.note !== undefined && typeof event.note !== 'string')) {
+      throw new Error('O backup contém um registro inválido. Nenhum dado foi importado.');
+    }
+    if (seenIds.has(event.id)) return false;
+    seenIds.add(event.id);
+    return true;
+  }).map(event => ({
+      id: event.id,
+      environment: event.environment,
+      at: new Date(event.at).toISOString(),
+      note: typeof event.note === 'string' ? event.note.slice(0, 1000) : ''
+    }));
+}
+
+async function importBackup(file) {
+  if (!file) return;
+  if (file.size > MAX_BACKUP_BYTES) {
+    throw new Error('O arquivo excede o limite de 5 MB.');
+  }
+
+  const payload = JSON.parse(await file.text());
+  const imported = validateBackup(payload);
+  const existing = readEvents();
+  const knownIds = new Set(existing.map(event => event.id));
+  const uniqueImported = imported.filter(event => !knownIds.has(event.id));
+
+  if (!uniqueImported.length) {
+    backupMessage.textContent = 'Nenhum registro novo encontrado. Seu histórico foi mantido.';
+    return;
+  }
+
+  const accepted = window.confirm(
+    `O backup contém ${imported.length} registros. ${uniqueImported.length} são novos. ` +
+    'Deseja adicionar os novos registros sem apagar os atuais?'
+  );
+  if (!accepted) {
+    backupMessage.textContent = 'Importação cancelada. Seus registros foram preservados.';
+    return;
+  }
+
+  // Gravação única: se falhar, os registros anteriores permanecem intactos.
+  saveEvents([...existing, ...uniqueImported]);
+  render();
+  backupMessage.textContent =
+    `${uniqueImported.length} registros importados. ${imported.length - uniqueImported.length} duplicados ignorados.`;
+}
+
 for (const environment of ENVIRONMENTS) {
   const option = document.createElement('option');
   option.value = environment.id;
@@ -173,14 +260,12 @@ form.addEventListener('submit', event => {
     message.textContent = 'Informe uma data e hora válidas.';
     return;
   }
-
   if (dateTime.getTime() > Date.now()) {
     message.textContent = 'Não é permitido registrar uma data ou hora futura.';
     return;
   }
 
   const events = readEvents();
-
   events.push({
     id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
     environment: environmentInput.value,
@@ -201,6 +286,20 @@ form.addEventListener('submit', event => {
 });
 
 document.querySelector('#refresh-report').addEventListener('click', render);
+backupButton.addEventListener('click', exportBackup);
+importButton.addEventListener('click', () => importInput.click());
+importInput.addEventListener('change', async () => {
+  backupMessage.textContent = '';
+  try {
+    await importBackup(importInput.files[0]);
+  } catch (error) {
+    console.error('Falha ao importar backup.', error);
+    backupMessage.textContent = error.message || 'Não foi possível ler o arquivo de backup.';
+  } finally {
+    importInput.value = '';
+  }
+});
+
 setDateTimeDefaults();
 render();
 

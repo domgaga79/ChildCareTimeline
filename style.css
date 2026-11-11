@@ -11,7 +11,6 @@
   --paper: #ffffff;
   --accent: #176b57;
 }
-
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 button, input, select, textarea { font: inherit; }
@@ -55,6 +54,12 @@ button:hover { background: #315675; }
 .event-note { grid-column: 1 / -1; color: var(--muted); font-size: .83rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .empty-state { padding: 10px 0; color: var(--muted); font-size: .88rem; }
 .app-footer { padding: 4px 2px; color: var(--muted); font-size: .76rem; text-align: center; }
+
+.backup-description { margin: -3px 0 14px; color: var(--muted); font-size: .84rem; line-height: 1.5; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.backup-actions button { flex: 1 1 170px; }
+#backup-message { margin-top: 12px; }
+
 @media (max-width: 480px) {
   .app { width: min(100% - 20px, 720px); padding-top: 20px; }
   .panel { padding: 17px; }

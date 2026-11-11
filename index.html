@@ -7,6 +7,7 @@
   <meta name="description" content="Registro local de transições e tempo de permanência por ambiente.">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
   <title>Tempo por ambiente</title>
 </head>
@@ -25,7 +26,6 @@
       <form id="transition-form">
         <label for="environment">Quem está recebendo a criança?</label>
         <select id="environment" name="environment" required></select>
-
         <div class="field-grid">
           <div>
             <label for="date">Data</label>
@@ -36,10 +36,8 @@
             <input id="time" name="time" type="time" required>
           </div>
         </div>
-
         <label for="note">Nota <span class="optional">(opcional)</span></label>
         <textarea id="note" name="note" rows="2" maxlength="1000" placeholder="Observações sobre a transição"></textarea>
-
         <div class="form-footer">
           <p id="form-message" class="message" role="status" aria-live="polite"></p>
           <button type="submit">Adicionar</button>
@@ -69,7 +67,23 @@
       </ol>
     </section>
 
-    <footer class="app-footer">Os dados ficam salvos somente neste navegador.</footer>
+    <section class="panel" aria-labelledby="backup-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">SEGURANÇA DOS DADOS</p>
+          <h2 id="backup-title">Backup e restauração</h2>
+        </div>
+      </div>
+      <p class="backup-description">Exporte seu histórico para guardar uma cópia ou restaure um arquivo em outro dispositivo. A importação adiciona registros novos sem apagar os existentes.</p>
+      <div class="backup-actions">
+        <button id="export-backup" type="button">Exportar backup</button>
+        <button id="import-backup" class="button-secondary" type="button">Restaurar backup</button>
+        <input id="backup-file" type="file" accept="application/json,.json" hidden>
+      </div>
+      <p id="backup-message" class="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <footer class="app-footer">Os dados ficam salvos somente neste navegador. Faça backups regulares.</footer>
   </main>
   <script src="app.js" defer></script>
 </body>
