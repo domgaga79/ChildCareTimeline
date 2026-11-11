@@ -173,6 +173,12 @@ form.addEventListener('submit', event => {
     message.textContent = 'Informe uma data e hora válidas.';
     return;
   }
+
+  if (dateTime.getTime() > Date.now()) {
+    message.textContent = 'Não é permitido registrar uma data ou hora futura.';
+    return;
+  }
+
   const events = readEvents();
 
   events.push({
