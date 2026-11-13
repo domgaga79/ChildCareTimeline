@@ -1,0 +1,35 @@
+name: Testes automatizados
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Testes unitários (Node.js 22)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Executar testes unitários
+        run: node --test report-core.test.js
+
+      - name: Verificar sintaxe JavaScript
+        run: |
+          node --check app.js
+          node --check sw.js
