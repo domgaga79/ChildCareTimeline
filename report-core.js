@@ -39,14 +39,39 @@ function calculatePercentages(totals, totalMs) {
   return result;
 }
 
-function validateBackup(payload, environments, format = 'ChildCareTimelineBackup', version = 1) {
-  if (!payload || payload.format !== format || payload.version !== version ||
+function validateBackupData(payload, defaultEnvironments, format = 'ChildCareTimelineBackup') {
+  if (!payload || payload.format !== format || ![1, 2].includes(payload.version) ||
       !Array.isArray(payload.events) || payload.events.length > 100000)
     throw new Error('Arquivo de backup inválido ou versão não compatível.');
+
+  let environments;
+  if (payload.version === 1) {
+    environments = defaultEnvironments.map(id => ({
+      id,
+      label: ({ pai: 'Pai', mae: 'Mãe', avo: 'Avó', escola: 'Escola' })[id] || id,
+      active: true
+    }));
+  } else {
+    if (!Array.isArray(payload.environments) || !payload.environments.length || payload.environments.length > 500)
+      throw new Error('O backup não contém uma lista válida de locais.');
+    const ids = new Set();
+    environments = payload.environments.map(env => {
+      if (!env || typeof env.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(env.id) ||
+          typeof env.label !== 'string' || !env.label.trim() || env.label.trim().length > 40 ||
+          (env.active !== undefined && typeof env.active !== 'boolean') || ids.has(env.id))
+        throw new Error('O backup contém um local inválido. Nenhum dado foi importado.');
+      ids.add(env.id);
+      return { id: env.id, label: env.label.trim(), active: env.active !== false };
+    });
+    if (!environments.some(env => env.active))
+      throw new Error('O backup precisa conter pelo menos um local ativo.');
+  }
+
+  const validIds = new Set(environments.map(env => env.id));
   const seen = new Set();
-  return payload.events.filter(event => {
+  const events = payload.events.filter(event => {
     if (!event || typeof event.id !== 'string' || !event.id ||
-        !environments.includes(event.environment) || typeof event.at !== 'string' ||
+        !validIds.has(event.environment) || typeof event.at !== 'string' ||
         !Number.isFinite(Date.parse(event.at)) ||
         (event.note !== undefined && typeof event.note !== 'string'))
       throw new Error('O backup contém um registro inválido. Nenhum dado foi importado.');
@@ -57,6 +82,13 @@ function validateBackup(payload, environments, format = 'ChildCareTimelineBackup
     at: new Date(event.at).toISOString(),
     note: typeof event.note === 'string' ? event.note.slice(0, 1000) : ''
   }));
+  return { events, environments };
+}
+
+function validateBackup(payload, environments, format = 'ChildCareTimelineBackup', version = 1) {
+  if (!payload || payload.version !== version)
+    throw new Error('Arquivo de backup inválido ou versão não compatível.');
+  return validateBackupData(payload, environments, format).events;
 }
 
 function mergeEvents(existing, imported) {
@@ -73,6 +105,6 @@ function toCsv(rows) {
 }
 
 if (typeof module !== 'undefined' && module.exports)
-  module.exports = { calculateResidence, calculatePercentages, validateBackup, mergeEvents, toCsv };
+  module.exports = { calculateResidence, calculatePercentages, validateBackup, validateBackupData, mergeEvents, toCsv };
 if (typeof globalThis !== 'undefined')
-  globalThis.ChildCareReport = { calculateResidence, calculatePercentages, validateBackup, mergeEvents, toCsv };
+  globalThis.ChildCareReport = { calculateResidence, calculatePercentages, validateBackup, validateBackupData, mergeEvents, toCsv };

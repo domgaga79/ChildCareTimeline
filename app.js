@@ -1,12 +1,13 @@
 'use strict';
 
-const ENVIRONMENTS = [
-  { id: 'pai', label: 'Pai' }, { id: 'mae', label: 'Mãe' },
-  { id: 'avo', label: 'Avó' }, { id: 'escola', label: 'Escola' }
+const DEFAULT_ENVIRONMENTS = [
+  { id: 'pai', label: 'Pai', active: true }, { id: 'mae', label: 'Mãe', active: true },
+  { id: 'avo', label: 'Avó', active: true }, { id: 'escola', label: 'Escola', active: true }
 ];
+const ENVIRONMENTS_KEY = 'tempo-por-ambiente.environments.v1';
 const STORAGE_KEY = 'tempo-por-ambiente.events.v1';
 const BACKUP_FORMAT = 'ChildCareTimelineBackup';
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const $ = selector => document.querySelector(selector);
 
@@ -19,6 +20,10 @@ const eventCount = $('#event-count'), historyLimit = $('#history-limit');
 const fullHistoryDialog = $('#full-history-dialog'), fullEventList = $('#full-event-list');
 const eventDialog = $('#event-dialog'), editForm = $('#edit-event-form');
 const importDialog = $('#import-choice-dialog');
+const locationsDialog = $('#locations-dialog');
+const locationsList = $('#locations-list');
+const locationForm = $('#location-form'), locationNameInput = $('#location-name');
+const locationMessage = $('#location-message');
 const backupMessage = $('#backup-message'), importInput = $('#backup-file');
 let editingId = null, pendingImport = null;
 
@@ -30,6 +35,36 @@ function localDateTimeParts(date = new Date()) {
 function setDateTimeDefaults() {
   const now = localDateTimeParts(); dateInput.value = now.date; timeInput.value = now.time;
 }
+function readEnvironments() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(ENVIRONMENTS_KEY) || 'null');
+    if (!Array.isArray(stored) || !stored.length) return DEFAULT_ENVIRONMENTS.map(env => ({ ...env }));
+    const valid = stored.filter(env => env && typeof env.id === 'string' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(env.id) && typeof env.label === 'string' && env.label.trim() && env.label.trim().length <= 40);
+    if (!valid.length) return DEFAULT_ENVIRONMENTS.map(env => ({ ...env }));
+    const environments = valid.map(env => ({ id: env.id, label: env.label.trim(), active: env.active !== false }));
+    if (!environments.some(env => env.active)) environments[0].active = true;
+    return environments;
+  } catch (error) { console.error('Erro ao ler locais.', error); return DEFAULT_ENVIRONMENTS.map(env => ({ ...env })); }
+}
+let ENVIRONMENTS = readEnvironments();
+function saveEnvironments(environments) { localStorage.setItem(ENVIRONMENTS_KEY, JSON.stringify(environments)); ENVIRONMENTS = environments; }
+function saveImportedData(environments, events) {
+  const previousEnvironments = localStorage.getItem(ENVIRONMENTS_KEY);
+  const previousEvents = localStorage.getItem(STORAGE_KEY);
+  const previousList = ENVIRONMENTS;
+  try {
+    localStorage.setItem(ENVIRONMENTS_KEY, JSON.stringify(environments));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    ENVIRONMENTS = environments;
+  } catch (error) {
+    if (previousEnvironments === null) localStorage.removeItem(ENVIRONMENTS_KEY);
+    else localStorage.setItem(ENVIRONMENTS_KEY, previousEnvironments);
+    if (previousEvents === null) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, previousEvents);
+    ENVIRONMENTS = previousList;
+    throw error;
+  }
+}
 function readEvents() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -39,6 +74,13 @@ function readEvents() {
 }
 function saveEvents(events) { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); }
 function environmentName(id) { return ENVIRONMENTS.find(env => env.id === id)?.label || id; }
+function activeEnvironments() { return ENVIRONMENTS.filter(env => env.active !== false); }
+function makeEnvironmentId(label) {
+  const slug = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'local';
+  let id = slug, suffix = 2;
+  while (ENVIRONMENTS.some(env => env.id === id)) id = `${slug}-${suffix++}`;
+  return id;
+}
 function formatDate(date) {
   return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }).format(date);
 }
@@ -119,7 +161,7 @@ function downloadFile(filename, content, type) {
   document.body.append(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function exportBackup() {
-  const events=readEvents(), payload={format:BACKUP_FORMAT,version:BACKUP_VERSION,exportedAt:new Date().toISOString(),events};
+  const events=readEvents(), payload={format:BACKUP_FORMAT,version:BACKUP_VERSION,exportedAt:new Date().toISOString(),environments:ENVIRONMENTS,events};
   downloadFile(`childcaretimeline-backup-${localDateTimeParts().date}.json`,JSON.stringify(payload,null,2),'application/json');
   backupMessage.textContent=`${events.length} registros exportados. Guarde o arquivo em local seguro.`;
 }
@@ -145,24 +187,61 @@ function exportReportCsv() {
 function openEdit(id) {
   const event=readEvents().find(item=>item.id===id); if (!event) return;
   editingId=id; const date=new Date(event.at), parts=localDateTimeParts(date);
+  populateEnvironmentSelect($('#edit-environment'), event.environment);
   $('#edit-environment').value=event.environment; $('#edit-date').value=parts.date;
   $('#edit-time').value=parts.time; $('#edit-note').value=event.note||'';
   $('#edit-message').textContent=''; eventDialog.showModal();
 }
 function closeEdit() { editingId=null; eventDialog.close(); }
-function populateEnvironmentSelect(select) {
-  select.replaceChildren();
-  ENVIRONMENTS.forEach(env=>{const option=document.createElement('option');option.value=env.id;option.textContent=env.label;select.append(option);});
+function populateEnvironmentSelect(select, includeId = null) {
+  const previous = select.value; select.replaceChildren();
+  const options = [...activeEnvironments()];
+  const archived = ENVIRONMENTS.find(env => env.id === includeId && env.active === false);
+  if (archived) options.push(archived);
+  options.forEach(env=>{const option=document.createElement('option');option.value=env.id;option.textContent=env.label + (env.active === false ? ' (excluído)' : '');select.append(option);});
+  if (activeEnvironments().some(env => env.id === previous)) select.value = previous;
+}
+function renderLocations() {
+  locationsList.replaceChildren();
+  activeEnvironments().forEach(env => {
+    const row = document.createElement('li'); row.className = 'location-item';
+    const name = document.createElement('span'); name.className = 'location-label'; name.textContent = env.label;
+    const actions = document.createElement('div'); actions.className = 'location-actions';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'button-secondary'; edit.textContent = 'Editar';
+    edit.addEventListener('click', () => renameEnvironment(env.id));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'button-danger'; remove.textContent = 'Excluir';
+    remove.addEventListener('click', () => archiveEnvironment(env.id));
+    actions.append(edit, remove); row.append(name, actions); locationsList.append(row);
+  });
+  if (!activeEnvironments().length) { const empty=document.createElement('li'); empty.className='empty-state'; empty.textContent='Nenhum local ativo.'; locationsList.append(empty); }
+}
+function renameEnvironment(id) {
+  const env = ENVIRONMENTS.find(item => item.id === id); if (!env) return;
+  const value = window.prompt('Novo nome do local:', env.label); if (value === null) return;
+  const label = value.trim();
+  if (!label || label.length > 40) { locationMessage.textContent='Informe um nome de 1 a 40 caracteres.'; return; }
+  if (ENVIRONMENTS.some(item => item.id !== id && item.active !== false && item.label.toLocaleLowerCase('pt-BR') === label.toLocaleLowerCase('pt-BR'))) { locationMessage.textContent='Já existe um local ativo com esse nome.'; return; }
+  const updated = ENVIRONMENTS.map(item => item.id === id ? { ...item, label } : item);
+  try { saveEnvironments(updated); locationMessage.textContent='Nome do local atualizado.'; populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment')); renderLocations(); render(); }
+  catch (error) { locationMessage.textContent='Não foi possível salvar o novo nome.'; }
+}
+function archiveEnvironment(id) {
+  const env = ENVIRONMENTS.find(item => item.id === id); if (!env) return;
+  if (activeEnvironments().length <= 1) { locationMessage.textContent='É necessário manter pelo menos um local ativo.'; return; }
+  if (!window.confirm(`Excluir ${env.label} das opções? Os registros antigos serão preservados no histórico e nos relatórios.`)) return;
+  const updated = ENVIRONMENTS.map(item => item.id === id ? { ...item, active: false } : item);
+  try { saveEnvironments(updated); populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment')); renderLocations(); render(); locationMessage.textContent=`${env.label} foi excluído das opções. O histórico foi preservado.`; }
+  catch (error) { locationMessage.textContent='Não foi possível excluir o local.'; }
 }
 async function importBackup(file) {
   if (!file) return;
   if (file.size>MAX_BACKUP_BYTES) throw new Error('O arquivo excede o limite de 5 MB.');
   const payload=JSON.parse(await file.text());
-  const imported=ChildCareReport.validateBackup(payload,ENVIRONMENTS.map(env=>env.id),BACKUP_FORMAT,BACKUP_VERSION);
+  const imported=ChildCareReport.validateBackupData(payload,DEFAULT_ENVIRONMENTS.map(env=>env.id),BACKUP_FORMAT);
   pendingImport=imported;
   if (typeof importDialog.showModal==='function') importDialog.showModal();
   else {
-    const replace=window.confirm(`O backup contém ${imported.length} registros. OK para substituir tudo; Cancelar para escolher adicionar.`);
+    const replace=window.confirm(`O backup contém ${imported.events.length} registros. OK para substituir tudo; Cancelar para escolher adicionar.`);
     if (replace) applyImport('replace');
     else if (window.confirm('Deseja adicionar os registros novos sem apagar os atuais?')) applyImport('add');
     else backupMessage.textContent='Importação cancelada.';
@@ -172,16 +251,19 @@ function applyImport(mode) {
   if (!pendingImport) return;
   const existing=readEvents();
   if (mode==='replace') {
-    try { saveEvents(pendingImport); render(); backupMessage.textContent=`Histórico substituído por ${pendingImport.length} registros do backup.`; }
+    try { saveImportedData(pendingImport.environments, pendingImport.events); populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment')); renderLocations(); render(); backupMessage.textContent=`Histórico substituído por ${pendingImport.events.length} registros do backup.`; }
     catch(error) { backupMessage.textContent='Não foi possível gravar o backup. Os dados anteriores foram preservados.'; }
   } else {
-    const merged=ChildCareReport.mergeEvents(existing,pendingImport);
-    try { saveEvents(merged.events); render(); backupMessage.textContent=`${merged.added} registros adicionados; ${merged.duplicates} duplicados ignorados.`; }
+    const merged=ChildCareReport.mergeEvents(existing,pendingImport.events);
+    const known = new Set(ENVIRONMENTS.map(env=>env.id));
+    const additions = pendingImport.environments.filter(env=>!known.has(env.id));
+    try { saveImportedData([...ENVIRONMENTS, ...additions], merged.events); populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment')); renderLocations(); render(); backupMessage.textContent=`${merged.added} registros adicionados; ${merged.duplicates} duplicados ignorados. ${additions.length} locais novos importados.`; }
     catch(error) { backupMessage.textContent='Não foi possível gravar o backup. Os dados anteriores foram preservados.'; }
   }
   pendingImport=null; if (importDialog.open) importDialog.close();
 }
 populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment'));
+renderLocations();
 setDateTimeDefaults(); render();
 
 form.addEventListener('submit',event=>{
@@ -213,6 +295,16 @@ $('#delete-event').addEventListener('click',()=>{
   if (!editingId||!window.confirm('Tem certeza de que deseja excluir esta transição? Esta ação não pode ser desfeita.')) return;
   try {saveEvents(readEvents().filter(item=>item.id!==editingId));closeEdit();render();backupMessage.textContent='Registro excluído.';}
   catch(error){$('#edit-message').textContent='Não foi possível excluir o registro.';}
+});
+$('#manage-locations').addEventListener('click',()=>{locationMessage.textContent=''; renderLocations(); locationsDialog.showModal();});
+$('#close-locations').addEventListener('click',()=>locationsDialog.close());
+locationForm.addEventListener('submit',event=>{
+  event.preventDefault(); const label=locationNameInput.value.trim();
+  if (!label || label.length>40) { locationMessage.textContent='Informe um nome de 1 a 40 caracteres.'; return; }
+  if (ENVIRONMENTS.some(env=>env.active!==false && env.label.toLocaleLowerCase('pt-BR')===label.toLocaleLowerCase('pt-BR'))) { locationMessage.textContent='Já existe um local ativo com esse nome.'; return; }
+  const updated=[...ENVIRONMENTS,{id:makeEnvironmentId(label),label,active:true}];
+  try { saveEnvironments(updated); locationNameInput.value=''; locationMessage.textContent='Local adicionado.'; populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment')); renderLocations(); render(); }
+  catch(error) { locationMessage.textContent='Não foi possível adicionar o local.'; }
 });
 $('#export-backup').addEventListener('click',exportBackup);
 $('#export-events-csv').addEventListener('click',exportEventsCsv);

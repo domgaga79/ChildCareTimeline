@@ -1,8 +1,11 @@
-CHILDCARETIMELINE — ATUALIZAÇÃO CONSOLIDADA
+CHILDCARETIMELINE — GERENCIAMENTO DE LOCAIS
 
 Esta atualização reúne as funcionalidades solicitadas e preserva o armazenamento local existente.
 
 FUNCIONALIDADES
+- Gerenciamento de locais: adicionar, renomear e excluir locais das opções de novos registros.
+- Locais excluídos são arquivados para preservar o nome nos registros antigos, histórico e relatórios.
+- Backup JSON versão 2 inclui a lista de locais e continua aceitando backups versão 1.
 - Filtro do relatório por data inicial e final (data final inclusiva).
 - Cálculo do tempo e percentual por ambiente, considerando o ambiente ativo no início do período.
 - Aceita registros e simulações em datas futuras.
@@ -12,9 +15,9 @@ FUNCIONALIDADES
 - Exclusão de registro com confirmação.
 - Exportação de todos os eventos em CSV.
 - Exportação do relatório do período selecionado em CSV.
-- Backup JSON compatível com ChildCareTimelineBackup versão 1.
+- Backup JSON versão 2, mantendo a importação de arquivos da versão 1.
 - Importação com escolha entre substituir todo o histórico ou adicionar registros, ignorando IDs duplicados.
-- Funcionamento offline por PWA; cache atualizado para v5.
+- Funcionamento offline por PWA; cache atualizado para v13.
 
 INSTALAÇÃO NO CPANEL
 1. Antes de atualizar, faça backup dos arquivos atuais no cPanel.
@@ -23,7 +26,7 @@ INSTALAÇÃO NO CPANEL
    index.html, style.css, app.js, report-core.js, sw.js e manifest.json.
 4. Envie também a pasta icons, mantendo os arquivos e caminhos existentes.
 5. NÃO apague os dados do navegador, não limpe o localStorage e não altere a chave
-   tempo-por-ambiente.events.v1.
+   tempo-por-ambiente.events.v1 e a nova chave tempo-por-ambiente.environments.v1.
 6. Abra o aplicativo com internet, atualize a página e aguarde alguns segundos para
    o Service Worker instalar a versão nova. Se necessário, feche e abra o PWA.
 7. Teste primeiro com poucos registros ou em uma cópia/backup, antes de importar

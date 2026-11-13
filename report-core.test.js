@@ -1,7 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { calculateResidence, calculatePercentages, validateBackup, mergeEvents, toCsv } = require('./report-core.js');
+const { calculateResidence, calculatePercentages, validateBackup, validateBackupData, mergeEvents, toCsv } = require('./report-core.js');
+const ChildCareReportValidateV2 = payload => validateBackupData(payload, envs);
 const at = value => Date.parse(`2026-01-01T${value}:00Z`);
 const iso = value => new Date(at(value)).toISOString();
 const envs = ['pai','mae','avo','escola'];
@@ -60,3 +61,20 @@ test('CSV escapa aspas, ponto e vírgula e quebras de linha', () => {
   assert.equal(toCsv([['nome','nota'],['Ana; Bia','disse "oi"\nhoje']]),'nome;nota\r\n"Ana; Bia";"disse ""oi""\nhoje"');
 });
 test('CSV mantém campos vazios', () => { assert.equal(toCsv([['a','b'],['x','']]),'a;b\r\nx;'); });
+
+test('valida backup v2 com locais personalizados e locais arquivados', () => {
+  const result=ChildCareReportValidateV2({format:'ChildCareTimelineBackup',version:2,
+    environments:[{id:'pai',label:'Pai',active:true},{id:'casa-avo',label:'Casa da avó',active:false}],
+    events:[{id:'1',environment:'casa-avo',at:iso('01:00')}]});
+  assert.equal(result.events.length,1);
+  assert.deepEqual(result.environments,[{id:'pai',label:'Pai',active:true},{id:'casa-avo',label:'Casa da avó',active:false}]);
+});
+test('backup v2 rejeita evento vinculado a local inexistente', () => {
+  assert.throws(()=>ChildCareReportValidateV2({format:'ChildCareTimelineBackup',version:2,
+    environments:[{id:'pai',label:'Pai',active:true}],
+    events:[{id:'1',environment:'desconhecido',at:iso('01:00')}] }),/registro inválido/);
+});
+test('backup v2 exige pelo menos um local ativo', () => {
+  assert.throws(()=>ChildCareReportValidateV2({format:'ChildCareTimelineBackup',version:2,
+    environments:[{id:'pai',label:'Pai',active:false}],events:[]}),/pelo menos um local ativo/);
+});

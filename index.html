@@ -45,6 +45,17 @@
       </form>
     </section>
 
+    <section class="panel locations-panel" aria-labelledby="locations-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">PERSONALIZAÇÃO</p>
+          <h2 id="locations-title">Locais</h2>
+        </div>
+        <button id="manage-locations" class="button-secondary" type="button">Gerenciar locais</button>
+      </div>
+      <p class="backup-description">Personalize os locais usados nos registros e relatórios.</p>
+    </section>
+
     <section class="panel" aria-labelledby="report-title">
       <div class="section-heading">
         <div>
@@ -98,7 +109,7 @@
           <h2 id="backup-title">Backup e restauração</h2>
         </div>
       </div>
-      <p class="backup-description">Exporte seu histórico para guardar uma cópia ou restaure um arquivo em outro dispositivo. A importação adiciona registros novos sem apagar os existentes.</p>
+      <p class="backup-description">Exporte seu histórico e seus locais para guardar uma cópia ou restaure um arquivo em outro dispositivo. A importação permite substituir tudo ou adicionar registros e locais novos.</p>
       <div class="backup-actions">
         <button id="export-backup" type="button">Exportar backup</button>
         <button id="import-backup" class="button-secondary" type="button">Restaurar backup</button>
@@ -109,6 +120,17 @@
       <p id="backup-message" class="message" role="status" aria-live="polite"></p>
     </section>
 
+    <dialog id="locations-dialog" class="app-dialog">
+      <div class="dialog-heading"><h2>Gerenciar locais</h2><button id="close-locations" class="button-secondary" type="button">Fechar</button></div>
+      <p class="dialog-help">Edite nomes, adicione novos locais ou exclua locais das opções. Ao excluir, os registros antigos permanecem no histórico e nos relatórios.</p>
+      <form id="location-form" class="location-form">
+        <label for="location-name">Novo local</label>
+        <div class="location-add-row"><input id="location-name" type="text" maxlength="40" placeholder="Ex.: Casa do avô" required><button type="submit">Adicionar</button></div>
+      </form>
+      <p id="location-message" class="message" role="status" aria-live="polite"></p>
+      <h3 class="locations-subtitle">Locais disponíveis</h3>
+      <ul id="locations-list" class="locations-list"></ul>
+    </dialog>
     <dialog id="full-history-dialog" class="app-dialog">
       <div class="dialog-heading"><h2>Histórico completo</h2><button id="close-full-history" class="button-secondary" type="button">Fechar</button></div>
       <p class="dialog-help">Selecione um registro para editar ou excluir.</p>
