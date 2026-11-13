@@ -1,36 +1,35 @@
-# Tempo por ambiente
+# ChildCareTimeline
 
-PWA simples para registrar transições entre ambientes e calcular o tempo de permanência em cada um.
+PWA offline-first para registrar transições entre ambientes (Pai, Mãe, Avó e Escola) e calcular o tempo de permanência em cada um.
 
 ## Tecnologias
-
-- HTML, CSS e JavaScript vanilla
+- HTML, CSS e JavaScript sem frameworks
 - `localStorage` para persistência local
-- Service Worker para cache offline
+- Service Worker para funcionamento offline e atualização de cache
 - Web App Manifest para instalação como PWA
 
 ## Executar localmente
-
 Service Workers exigem `localhost` ou HTTPS. Com Python instalado:
-
 ```bash
 python -m http.server 8000
 ```
-
 Acesse `http://localhost:8000`.
 
-## Ambientes
+## Funcionalidades
+- Cadastro de transições, inclusive em datas futuras para simulações
+- Relatório por período, com duração e percentual por ambiente
+- Lista inicial configurável e histórico completo
+- Edição e exclusão de transições
+- Exportação de eventos e relatório em CSV
+- Backup JSON e importação com opção de substituir tudo ou adicionar registros
+- Persistência local e uso offline
 
-Edite o array `ENVIRONMENTS` no início de `app.js`.
+## Dados e privacidade
+Os registros ficam somente no armazenamento local do navegador/dispositivo, na chave `tempo-por-ambiente.events.v1`. Não há login, contas, nem sincronização entre dispositivos. Faça backups regulares antes de limpar os dados do navegador ou trocar de aparelho.
 
-## Regras atuais
-
-- Cada registro marca o início do ambiente selecionado.
-- O registro seguinte encerra o período anterior.
-- O relatório começa na primeira transição registrada e termina no momento da consulta.
-- Registros futuros não são aceitos.
-- Os dados ficam no navegador/dispositivo e não são sincronizados.
-
-## Atenção aos dados
-
-Limpar os dados do navegador pode apagar os registros. Esta versão ainda não tem exportação ou restauração de backup.
+## Testes
+Requer Node.js 18 ou superior:
+```bash
+node --test report-core.test.js
+```
+Consulte `README-UPGRADE.txt` para instruções de atualização no cPanel.

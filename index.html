@@ -53,14 +53,38 @@
         </div>
         <button id="refresh-report" class="button-secondary" type="button">Atualizar</button>
       </div>
+      <div class="report-filters" aria-label="Filtro do relatório">
+        <div>
+          <label for="report-from">De</label>
+          <input id="report-from" type="date">
+        </div>
+        <div>
+          <label for="report-to">Até</label>
+          <input id="report-to" type="date">
+        </div>
+        <div class="report-filter-actions">
+          <button id="apply-report-filter" type="button">Aplicar período</button>
+          <button id="clear-report-filter" class="button-secondary" type="button">Limpar</button>
+        </div>
+      </div>
       <p id="report-period" class="report-period">Adicione a primeira transição para iniciar.</p>
       <div id="report-results" class="report-results"></div>
     </section>
 
     <section class="panel" aria-labelledby="history-title">
       <div class="section-heading">
-        <h2 id="history-title">Histórico de transições</h2>
-        <span id="event-count" class="count">0 registros</span>
+        <div>
+          <h2 id="history-title">Últimas transições</h2>
+          <span id="event-count" class="count">0 registros</span>
+        </div>
+        <div class="history-controls">
+          <label class="compact-label" for="history-limit">Mostrar</label>
+          <select id="history-limit" class="limit-select">
+            <option value="5">5</option><option value="10" selected>10</option>
+            <option value="20">20</option><option value="50">50</option>
+          </select>
+          <button id="open-full-history" class="button-secondary" type="button">Histórico completo</button>
+        </div>
       </div>
       <ol id="event-list" class="event-list">
         <li class="empty-state">Nenhuma transição registrada.</li>
@@ -78,13 +102,43 @@
       <div class="backup-actions">
         <button id="export-backup" type="button">Exportar backup</button>
         <button id="import-backup" class="button-secondary" type="button">Restaurar backup</button>
+        <button id="export-events-csv" class="button-secondary" type="button">Exportar eventos CSV</button>
+        <button id="export-report-csv" class="button-secondary" type="button">Exportar relatório CSV</button>
         <input id="backup-file" type="file" accept="application/json,.json" hidden>
       </div>
       <p id="backup-message" class="message" role="status" aria-live="polite"></p>
     </section>
 
+    <dialog id="full-history-dialog" class="app-dialog">
+      <div class="dialog-heading"><h2>Histórico completo</h2><button id="close-full-history" class="button-secondary" type="button">Fechar</button></div>
+      <p class="dialog-help">Selecione um registro para editar ou excluir.</p>
+      <ol id="full-event-list" class="event-list"></ol>
+    </dialog>
+    <dialog id="event-dialog" class="app-dialog">
+      <form id="edit-event-form" class="dialog-form">
+        <h2>Editar transição</h2>
+        <label for="edit-environment">Ambiente</label><select id="edit-environment" required></select>
+        <div class="field-grid">
+          <div><label for="edit-date">Data</label><input id="edit-date" type="date" required></div>
+          <div><label for="edit-time">Hora</label><input id="edit-time" type="time" required></div>
+        </div>
+        <label for="edit-note">Nota <span class="optional">(opcional)</span></label><textarea id="edit-note" rows="3" maxlength="1000"></textarea>
+        <p id="edit-message" class="message" role="status" aria-live="polite"></p>
+        <div class="dialog-actions"><button id="delete-event" class="button-danger" type="button">Excluir</button><span class="dialog-spacer"></span><button id="cancel-edit" class="button-secondary" type="button">Cancelar</button><button type="submit">Salvar</button></div>
+      </form>
+    </dialog>
+    <dialog id="import-choice-dialog" class="app-dialog">
+      <h2>Como deseja importar?</h2>
+      <p class="dialog-help">Você pode substituir todo o histórico atual ou adicionar os registros do backup aos existentes.</p>
+      <div class="dialog-actions import-choice-actions">
+        <button id="replace-import" class="button-danger" type="button">Substituir tudo</button>
+        <button id="add-import" type="button">Adicionar registros</button>
+        <button id="cancel-import" class="button-secondary" type="button">Cancelar</button>
+      </div>
+    </dialog>
     <footer class="app-footer">Os dados ficam salvos somente neste navegador. Faça backups regulares.</footer>
   </main>
+  <script src="report-core.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
