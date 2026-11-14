@@ -33,17 +33,17 @@
 
 ## Qualidade e automação
 
-### [Em validação] GitHub Actions — testes automáticos
+### [Concluída] GitHub Actions — testes automáticos
 **Objetivo:** executar testes e verificações de sintaxe automaticamente no GitHub.
 **Configuração:** `.github/workflows/testes.yml`.
 **Gatilhos:** push para `main`, pull request direcionado a `main` e execução manual.
-**Critérios de aceite:** workflow conclui com sucesso; 18 testes aprovados; verificações `node --check app.js` e `node --check sw.js` aprovadas.
+**Validação:** workflow executado com sucesso; 18 testes aprovados; verificações `node --check app.js` e `node --check sw.js` aprovadas.
 
-## Pendências de validação manual
+## Validações manuais
 
-### [Pendente] Conferir backup JSON no modo offline
-**Objetivo:** fechar a validação de exportação e restauração de backup sem conexão.
-**Critérios de aceite:** exportar backup offline; importar escolhendo substituir ou adicionar; conferir os registros após atualizar a página; confirmar que os dados permanecem disponíveis offline.
+### [Concluída] Backup JSON no modo offline
+**Objetivo:** validar exportação e restauração de backup sem conexão.
+**Validação:** exportação JSON offline; importação offline com substituição dos registros; conferência do histórico após atualizar a página; persistência dos dados e locais personalizados após F5; retorno ao funcionamento online. Todos os passos confirmados pelo usuário.
 
 ## Fora do escopo aprovado
 - Login, autenticação e cadastro de usuários.
