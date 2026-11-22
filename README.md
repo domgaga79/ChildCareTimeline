@@ -1,6 +1,6 @@
 # ChildCareTimeline
 
-PWA offline-first para registrar transições entre locais personalizáveis e calcular o tempo de permanência em cada um.
+PWA offline-first para registrar transições entre locais personalizáveis e contar as noites de permanência em cada um.
 
 ## Tecnologias
 - HTML, CSS e JavaScript sem frameworks
@@ -18,7 +18,7 @@ Acesse `http://localhost:8000`.
 ## Funcionalidades
 - Gerenciamento de locais: adicionar, renomear e excluir das opções de novos registros; o histórico preserva os locais excluídos
 - Cadastro de transições, inclusive em datas futuras para simulações
-- Relatório por período, com duração e percentual por ambiente
+- Relatório por período, com noites e percentual por ambiente
 - Lista inicial configurável e histórico completo
 - Edição e exclusão de transições
 - Exportação de eventos e relatório em CSV
@@ -34,4 +34,16 @@ Requer Node.js 18 ou superior:
 ```bash
 node --test report-core.test.js
 ```
-Consulte `README-UPGRADE.txt` para instruções de atualização no cPanel.
+## Relatório e exportação
+
+O filtro inclui a data final. Cada data conta uma noite usando o local ativo à meia-noite que inicia essa data, no fuso do dispositivo. Uma transição exatamente à meia-noite já conta para o novo local. As noites sem histórico aparecem como **Sem registro** e entram no total do período. Datas futuras podem ser usadas para simular.
+
+O relatório sinaliza registros consecutivos no mesmo local e permanências acima do limite configurável, inicialmente 72 horas. Uma repetição não reinicia a permanência. Os alertas mostram as datas para conferência manual.
+
+Os CSVs usam vírgula como separador e ponto decimal. O CSV de eventos usa `dd-MM-yyyy HH:mm:ss` e contém ambiente, data e hora e observação.
+
+## Deploy no cPanel
+
+O job de deploy roda após a aprovação dos testes em pushes para `main`, quando a variável de repositório `CPANEL_DEPLOY_ENABLED` vale `true`. O servidor precisa aceitar SSH a partir do runner do GitHub e ter `rsync` instalado.
+
+Configure o ambiente `production` em Settings → Environments. Cadastre as variáveis `CPANEL_HOST`, `CPANEL_PORT` (opcional, padrão 22), `CPANEL_USER` e `CPANEL_DOCUMENT_ROOT` (caminho absoluto do subdomínio). Cadastre os secrets `CPANEL_SSH_KEY` (chave dedicada cuja pública foi autorizada no cPanel) e `CPANEL_KNOWN_HOSTS` (chave pública do servidor verificada, no formato OpenSSH). Ative o job após configurar o ambiente.

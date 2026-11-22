@@ -39,6 +39,65 @@ function calculatePercentages(totals, totalMs) {
   return result;
 }
 
+function orderedTransitions(events) {
+  return events
+    .filter(event => event && typeof event.environment === 'string' && Number.isFinite(Date.parse(event.at)))
+    .map(event => ({ environment: event.environment, at: Date.parse(event.at) }))
+    .sort((a, b) => a.at - b.at);
+}
+
+function calculateNights(events, startMs, endMs) {
+  const totals = Object.create(null);
+  let total = 0, unknown = 0;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs)
+    return { totals, total, unknown };
+
+  const ordered = orderedTransitions(events);
+  const day = new Date(startMs);
+  day.setHours(0, 0, 0, 0);
+  let index = 0, environment;
+  while (day.getTime() < endMs) {
+    const midnight = day.getTime();
+    if (midnight >= startMs) {
+      while (index < ordered.length && ordered[index].at <= midnight)
+        environment = ordered[index++].environment;
+      if (environment === undefined) unknown++;
+      else totals[environment] = (totals[environment] || 0) + 1;
+      total++;
+    }
+    day.setDate(day.getDate() + 1);
+    day.setHours(0, 0, 0, 0);
+  }
+  return { totals, total, unknown };
+}
+
+function findInconsistencies(events, startMs, endMs, limitHours = 72) {
+  const ordered = orderedTransitions(events);
+  const repeated = [], longStays = [];
+  const limitMs = limitHours * 3600000;
+  let stay;
+  function checkStay(until) {
+    if (stay && until > startMs && until - stay.at > limitMs)
+      longStays.push({ environment: stay.environment, from: stay.at, to: until });
+  }
+  for (const event of ordered) {
+    if (event.at >= endMs) break;
+    if (stay?.environment === event.environment) {
+      if (event.at >= startMs) repeated.push(event);
+    } else {
+      checkStay(event.at);
+      stay = event;
+    }
+  }
+  checkStay(endMs);
+  return { repeated, longStays };
+}
+
+function formatCsvDateTime(date) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${String(date.getFullYear()).padStart(4, '0')} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 function validateBackupData(payload, defaultEnvironments, format = 'ChildCareTimelineBackup') {
   if (!payload || payload.format !== format || ![1, 2].includes(payload.version) ||
       !Array.isArray(payload.events) || payload.events.length > 100000)
@@ -100,11 +159,11 @@ function mergeEvents(existing, imported) {
 function toCsv(rows) {
   return rows.map(row => row.map(value => {
     const text = String(value ?? '');
-    return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  }).join(';')).join('\r\n');
+    return /[,"\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }).join(',')).join('\r\n');
 }
 
 if (typeof module !== 'undefined' && module.exports)
-  module.exports = { calculateResidence, calculatePercentages, validateBackup, validateBackupData, mergeEvents, toCsv };
+  module.exports = { calculateResidence, calculatePercentages, calculateNights, findInconsistencies, formatCsvDateTime, validateBackup, validateBackupData, mergeEvents, toCsv };
 if (typeof globalThis !== 'undefined')
-  globalThis.ChildCareReport = { calculateResidence, calculatePercentages, validateBackup, validateBackupData, mergeEvents, toCsv };
+  globalThis.ChildCareReport = { calculateResidence, calculatePercentages, calculateNights, findInconsistencies, formatCsvDateTime, validateBackup, validateBackupData, mergeEvents, toCsv };

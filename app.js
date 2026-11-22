@@ -5,6 +5,7 @@ const DEFAULT_ENVIRONMENTS = [
   { id: 'avo', label: 'Avó', active: true }, { id: 'escola', label: 'Escola', active: true }
 ];
 const ENVIRONMENTS_KEY = 'tempo-por-ambiente.environments.v1';
+const STAY_LIMIT_KEY = 'tempo-por-ambiente.stay-limit-hours';
 const STORAGE_KEY = 'tempo-por-ambiente.events.v1';
 const BACKUP_FORMAT = 'ChildCareTimelineBackup';
 const BACKUP_VERSION = 2;
@@ -16,6 +17,8 @@ const dateInput = $('#date'), timeInput = $('#time'), noteInput = $('#note');
 const message = $('#form-message'), reportPeriod = $('#report-period');
 const reportResults = $('#report-results'), reportFromInput = $('#report-from');
 const reportToInput = $('#report-to'), eventList = $('#event-list');
+const stayLimit = $('#stay-limit'), inconsistencyStatus = $('#inconsistency-status');
+const inconsistencyList = $('#inconsistency-list');
 const eventCount = $('#event-count'), historyLimit = $('#history-limit');
 const fullHistoryDialog = $('#full-history-dialog'), fullEventList = $('#full-event-list');
 const eventDialog = $('#event-dialog'), editForm = $('#edit-event-form');
@@ -82,18 +85,11 @@ function makeEnvironmentId(label) {
   return id;
 }
 function formatDate(date) {
-  return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }).format(date);
+  return new Intl.DateTimeFormat('en-GB', { day:'2-digit', month:'2-digit', year:'numeric' }).format(date);
 }
 function formatDateTime(date) {
-  return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric',
+  return new Intl.DateTimeFormat('en-GB', { day:'2-digit', month:'2-digit', year:'numeric',
     hour:'2-digit', minute:'2-digit' }).format(date);
-}
-function formatDuration(ms) {
-  const mins = Math.max(0, Math.floor(ms / 60000)), days = Math.floor(mins/1440);
-  const hours = Math.floor((mins%1440)/60), minutes = mins%60, parts = [];
-  if (days) parts.push(`${days}d`);
-  if (hours || days) parts.push(`${hours}h`);
-  parts.push(`${minutes}min`); return parts.join(' ');
 }
 function dateInputStart(value) {
   if (!value) return null;
@@ -127,32 +123,63 @@ function renderHistory(events) {
   renderEventList(eventList,ordered,Number(historyLimit.value)||10);
   renderEventList(fullEventList,ordered);
 }
+function renderInconsistencies(events, start, end) {
+  const limit = stayLimit.valueAsNumber;
+  if (!stayLimit.checkValidity() || !Number.isFinite(limit)) {
+    inconsistencyStatus.textContent = 'Informe um limite maior que zero para verificar a permanência.';
+    return;
+  }
+  const { repeated, longStays } = ChildCareReport.findInconsistencies(events, start, end, limit);
+  const alerts = [
+    ...repeated.map(({ environment, at }) =>
+      `${formatDateTime(new Date(at))} — ${environmentName(environment)} repetido em registros consecutivos.`),
+    ...longStays.map(({ environment, from, to }) =>
+      `${formatDateTime(new Date(from))} a ${formatDateTime(new Date(to))} — ${environmentName(environment)} por mais de ${limit} horas.`)
+  ];
+  inconsistencyStatus.textContent = alerts.length
+    ? 'Inconsistências para verificação manual'
+    : 'Nenhuma inconsistência encontrada no período.';
+  for (const alert of alerts) {
+    const item = document.createElement('li');
+    item.textContent = alert;
+    inconsistencyList.append(item);
+  }
+  inconsistencyList.hidden = !alerts.length;
+}
 function renderReport(events, now = new Date()) {
   reportResults.replaceChildren();
-  const from=reportFromInput.value, to=reportToInput.value;
-  if (from && to && from>to) { reportPeriod.textContent='O início do período não pode ser posterior ao fim.'; return null; }
-  const ordered=[...events].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
-  if (!ordered.length) { reportPeriod.textContent='Adicione a primeira transição para iniciar.'; return null; }
-  const start=dateInputStart(from) ?? Date.parse(ordered[0].at);
-  const end=dateInputEndExclusive(to) ?? now.getTime();
-  if (end<=start) { reportPeriod.textContent='O período selecionado ainda não possui duração para calcular.'; return null; }
-  const result=ChildCareReport.calculateResidence(events,start,end);
-  if (!result.totalMs) { reportPeriod.textContent='Não há transições registradas dentro do período selecionado.'; return null; }
-  const range=`${from?formatDate(new Date(result.actualStartMs)):formatDateTime(new Date(result.actualStartMs))} a ${to?formatDate(new Date(end-1)):formatDateTime(new Date(end))}`;
-  reportPeriod.textContent=`Período calculado: ${range}${result.actualStartMs>start?' (a partir do primeiro registro disponível)':''}`;
-  const percentages=ChildCareReport.calculatePercentages(result.totals,result.totalMs);
-  for (const env of ENVIRONMENTS) {
-    const ms=result.totals[env.id]||0; if (!ms && result.totalMs>0) continue;
-    const pct=percentages[env.id]||0;
-    const row=document.createElement('div'); row.className='report-row';
-    const name=document.createElement('span'); name.className='report-name'; name.textContent=env.label;
-    const value=document.createElement('span'); value.className='report-value';
-    value.textContent=`${formatDuration(ms)} (${pct.toFixed(1).replace('.',',')}%)`;
-    const bar=document.createElement('div'); bar.className='report-percent';
-    const fill=document.createElement('span'); fill.style.width=`${Math.min(100,pct)}%`; bar.append(fill);
-    row.append(name,value,bar); reportResults.append(row);
+  inconsistencyList.replaceChildren();
+  inconsistencyList.hidden = true;
+  inconsistencyStatus.textContent = '';
+  const from = reportFromInput.value, to = reportToInput.value;
+  if (from && to && from > to) {
+    reportPeriod.textContent = 'O início do período não pode ser posterior ao fim.';
+    return null;
   }
-  return { result, start, end };
+  const first = events.reduce((earliest, event) => Math.min(earliest, Date.parse(event.at)), Infinity);
+  const start = dateInputStart(from) ?? first;
+  const end = dateInputEndExclusive(to) ?? now.getTime();
+  if (end <= start) {
+    reportPeriod.textContent = events.length ? 'O período selecionado ainda não começou.' : 'Adicione a primeira transição ou selecione um período.';
+    return null;
+  }
+  const result = ChildCareReport.calculateNights(events, start, end);
+  const rows = ENVIRONMENTS.filter(env => result.totals[env.id])
+    .map(env => [env.label, result.totals[env.id]]);
+  if (result.unknown) rows.push(['Sem registro', result.unknown]);
+  reportPeriod.textContent = `${formatDate(new Date(start))} a ${formatDate(new Date(end - 1))} · ${result.total} ${result.total === 1 ? 'noite' : 'noites'}`;
+  for (const [label, nights] of rows) {
+    const pct = nights / result.total * 100;
+    const row = document.createElement('div'); row.className = 'report-row';
+    const name = document.createElement('span'); name.className = 'report-name'; name.textContent = label;
+    const value = document.createElement('span'); value.className = 'report-value';
+    value.textContent = `${nights} ${nights === 1 ? 'noite' : 'noites'} (${pct.toFixed(1)}%)`;
+    const bar = document.createElement('div'); bar.className = 'report-percent';
+    const fill = document.createElement('span'); fill.style.width = `${pct}%`; bar.append(fill);
+    row.append(name, value, bar); reportResults.append(row);
+  }
+  renderInconsistencies(events, start, end);
+  return { result, rows, start, end };
 }
 function render() { const events=readEvents(); renderHistory(events); renderReport(events); }
 function downloadFile(filename, content, type) {
@@ -167,20 +194,19 @@ function exportBackup() {
 }
 function exportEventsCsv() {
   const events=[...readEvents()].sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
-  const rows=[['ID','Ambiente','Data e hora','Observação'],...events.map(e=>[e.id,environmentName(e.environment),formatDateTime(new Date(e.at)),e.note||''])];
+  const rows=[['Ambiente','Data e hora','Observação'],...events.map(e=>[environmentName(e.environment),ChildCareReport.formatCsvDateTime(new Date(e.at)),e.note||''])];
   downloadFile(`childcaretimeline-eventos-${localDateTimeParts().date}.csv`,'\uFEFF'+ChildCareReport.toCsv(rows),'text/csv;charset=utf-8');
   backupMessage.textContent=`CSV exportado com ${events.length} registros.`;
 }
 function exportReportCsv() {
   const events=readEvents(), range=renderReport(events);
   if (!range) { backupMessage.textContent='Não há um relatório válido para exportar. Verifique o período selecionado.'; return; }
-  const rows=[['Ambiente','Duração (minutos)','Percentual']];
-  for (const env of ENVIRONMENTS) {
-    const ms=range.result.totals[env.id]||0;
-    if (ms || range.result.totalMs) rows.push([env.label,Math.floor(ms/60000),(ms/range.result.totalMs*100).toFixed(2).replace('.',',')+'%']);
-  }
-  rows.push(['Total',Math.floor(range.result.totalMs/60000),'100%']);
-  rows.unshift(['Período',`${reportFromInput.value?formatDate(new Date(range.result.actualStartMs)):formatDateTime(new Date(range.result.actualStartMs))} até ${reportToInput.value?formatDate(new Date(range.end-1)):formatDateTime(new Date(range.end))}`,'']);
+  const { result, start, end } = range;
+  const rows = [['Ambiente', 'Noites', 'Percentual', 'De', 'Até']];
+  const dates = [formatDate(new Date(start)), formatDate(new Date(end - 1))];
+  for (const [label, nights] of range.rows)
+    rows.push([label, nights, (nights / result.total * 100).toFixed(2) + '%', ...dates]);
+  rows.push(['Total', result.total, result.total ? '100%' : '0%', ...dates]);
   downloadFile(`childcaretimeline-relatorio-${localDateTimeParts().date}.csv`,'\uFEFF'+ChildCareReport.toCsv(rows),'text/csv;charset=utf-8');
   backupMessage.textContent='Relatório do período exportado em CSV.';
 }
@@ -264,7 +290,13 @@ function applyImport(mode) {
 }
 populateEnvironmentSelect(environmentInput); populateEnvironmentSelect($('#edit-environment'));
 renderLocations();
+stayLimit.value = localStorage.getItem(STAY_LIMIT_KEY) || '72';
 setDateTimeDefaults(); render();
+stayLimit.addEventListener('change', () => {
+  if (stayLimit.checkValidity() && Number.isFinite(stayLimit.valueAsNumber))
+    localStorage.setItem(STAY_LIMIT_KEY, String(stayLimit.valueAsNumber));
+  renderReport(readEvents());
+});
 
 form.addEventListener('submit',event=>{
   event.preventDefault(); message.textContent='';

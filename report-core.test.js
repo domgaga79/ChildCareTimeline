@@ -57,10 +57,10 @@ test('adiciona apenas registros com IDs ainda não existentes', () => {
   const old=[{id:'1'}], incoming=[{id:'1'},{id:'2'},{id:'3'}], result=mergeEvents(old,incoming);
   assert.deepEqual(result.events,[{id:'1'},{id:'2'},{id:'3'}]); assert.equal(result.added,2); assert.equal(result.duplicates,1);
 });
-test('CSV escapa aspas, ponto e vírgula e quebras de linha', () => {
-  assert.equal(toCsv([['nome','nota'],['Ana; Bia','disse "oi"\nhoje']]),'nome;nota\r\n"Ana; Bia";"disse ""oi""\nhoje"');
+test('CSV escapa aspas, vírgulas e quebras de linha', () => {
+  assert.equal(toCsv([['nome','nota'],['Ana, Bia;','disse "oi"\nhoje']]),'nome,nota\r\n"Ana, Bia;","disse ""oi""\nhoje"');
 });
-test('CSV mantém campos vazios', () => { assert.equal(toCsv([['a','b'],['x','']]),'a;b\r\nx;'); });
+test('CSV mantém campos vazios', () => { assert.equal(toCsv([['a','b'],['x','']]),'a,b\r\nx,'); });
 
 test('valida backup v2 com locais personalizados e locais arquivados', () => {
   const result=ChildCareReportValidateV2({format:'ChildCareTimelineBackup',version:2,
@@ -77,4 +77,41 @@ test('backup v2 rejeita evento vinculado a local inexistente', () => {
 test('backup v2 exige pelo menos um local ativo', () => {
   assert.throws(()=>ChildCareReportValidateV2({format:'ChildCareTimelineBackup',version:2,
     environments:[{id:'pai',label:'Pai',active:false}],events:[]}),/pelo menos um local ativo/);
+});
+
+const { calculateNights, findInconsistencies, formatCsvDateTime } = require('./report-core.js');
+const midnight = day => +new Date(2026, 9, day);
+const transition = (environment, date) => ({ environment, at: new Date(date).toISOString() });
+
+test('30 datas inclusivas somam 30 noites, inclusive na troca de horário de verão', () => {
+  const events = [transition('pai', midnight(0)), transition('mae', midnight(16))];
+  const report = calculateNights(events, midnight(1), midnight(31));
+  assert.equal(report.total, 30);
+  assert.equal(report.totals.pai, 15);
+  assert.equal(report.totals.mae, 15);
+  assert.equal(report.unknown, 0);
+});
+
+test('meia-noite pertence ao novo local e lacuna anterior ao histórico fica sem registro', () => {
+  const report = calculateNights([transition('mae', midnight(2)), transition('pai', midnight(3))], midnight(1), midnight(3));
+  assert.equal(report.total, 2);
+  assert.equal(report.unknown, 1);
+  assert.equal(report.totals.mae, 1);
+  assert.equal(report.totals.pai, undefined);
+});
+
+test('detecção usa o histórico anterior ao filtro e repetições não reiniciam a permanência', () => {
+  const start = midnight(1);
+  const hour = 3600000;
+  const events = [transition('pai', start + hour), transition('pai', start)];
+  const exact = findInconsistencies(events, start + hour, start + 72 * hour);
+  assert.deepEqual(exact.repeated, [{ environment: 'pai', at: start + hour }]);
+  assert.equal(exact.longStays.length, 0);
+  assert.deepEqual(findInconsistencies(events, start + hour, start + 72 * hour + 1).longStays,
+    [{ environment: 'pai', from: start, to: start + 72 * hour + 1 }]);
+  assert.equal(findInconsistencies(events, start, start + 3 * hour, 2).longStays.length, 1);
+});
+
+test('data do CSV inclui segundos com dia e mês de dois dígitos', () => {
+  assert.equal(formatCsvDateTime(new Date(2026, 10, 9, 16, 23, 7)), '09-11-2026 16:23:07');
 });
