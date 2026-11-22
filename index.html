@@ -29,11 +29,11 @@
         <div class="field-grid">
           <div>
             <label for="date">Data</label>
-            <input id="date" name="date" type="date" required>
+            <input id="date" name="date" type="date" lang="en-GB" required>
           </div>
           <div>
             <label for="time">Hora</label>
-            <input id="time" name="time" type="time" required>
+            <input id="time" name="time" type="time" lang="en-GB" required>
           </div>
         </div>
         <label for="note">Nota <span class="optional">(opcional)</span></label>
@@ -67,11 +67,11 @@
       <div class="report-filters" aria-label="Filtro do relatório">
         <div>
           <label for="report-from">De</label>
-          <input id="report-from" type="date">
+          <input id="report-from" type="date" lang="en-GB">
         </div>
         <div>
           <label for="report-to">Até</label>
-          <input id="report-to" type="date">
+          <input id="report-to" type="date" lang="en-GB">
         </div>
         <div class="report-filter-actions">
           <button id="apply-report-filter" type="button">Aplicar período</button>
@@ -80,6 +80,10 @@
       </div>
       <p id="report-period" class="report-period">Adicione a primeira transição para iniciar.</p>
       <div id="report-results" class="report-results"></div>
+      <label for="stay-limit">Limite de permanência (horas)</label>
+      <input id="stay-limit" type="number" lang="en-GB" min="0.01" step="any" value="72">
+      <p id="inconsistency-status" class="report-period" aria-live="polite"></p>
+      <ul id="inconsistency-list" hidden></ul>
     </section>
 
     <section class="panel" aria-labelledby="history-title">
@@ -141,8 +145,8 @@
         <h2>Editar transição</h2>
         <label for="edit-environment">Ambiente</label><select id="edit-environment" required></select>
         <div class="field-grid">
-          <div><label for="edit-date">Data</label><input id="edit-date" type="date" required></div>
-          <div><label for="edit-time">Hora</label><input id="edit-time" type="time" required></div>
+          <div><label for="edit-date">Data</label><input id="edit-date" type="date" lang="en-GB" required></div>
+          <div><label for="edit-time">Hora</label><input id="edit-time" type="time" lang="en-GB" required></div>
         </div>
         <label for="edit-note">Nota <span class="optional">(opcional)</span></label><textarea id="edit-note" rows="3" maxlength="1000"></textarea>
         <p id="edit-message" class="message" role="status" aria-live="polite"></p>

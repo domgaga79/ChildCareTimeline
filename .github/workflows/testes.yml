@@ -33,3 +33,46 @@ jobs:
         run: |
           node --check app.js
           node --check sw.js
+
+  deploy:
+    name: Publicar no cPanel
+    needs: unit-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CPANEL_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: cpanel-production
+
+    steps:
+      - name: Baixar código testado
+        uses: actions/checkout@v4
+
+      - name: Publicar os arquivos da aplicação
+        shell: bash
+        env:
+          CPANEL_HOST: ${{ vars.CPANEL_HOST }}
+          CPANEL_PORT: ${{ vars.CPANEL_PORT || '22' }}
+          CPANEL_USER: ${{ vars.CPANEL_USER }}
+          CPANEL_DOCUMENT_ROOT: ${{ vars.CPANEL_DOCUMENT_ROOT }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          CPANEL_KNOWN_HOSTS: ${{ secrets.CPANEL_KNOWN_HOSTS }}
+        run: |
+          : "${CPANEL_SSH_KEY:?Configure a chave de deploy}"
+          : "${CPANEL_KNOWN_HOSTS:?Configure a identidade do servidor}"
+          [[ "$CPANEL_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$CPANEL_USER" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
+          [[ "$CPANEL_PORT" =~ ^[0-9]{1,5}$ ]]
+          [[ "$CPANEL_DOCUMENT_ROOT" =~ ^(/[a-zA-Z0-9_.-]+)+/?$ ]]
+          [[ ! "$CPANEL_DOCUMENT_ROOT" =~ /\.\.?(/|$) ]]
+
+          umask 077
+          key_dir=$(mktemp -d)
+          trap 'rm -rf -- "$key_dir"' EXIT
+          printf '%s\n' "$CPANEL_SSH_KEY" > "$key_dir/key"
+          printf '%s\n' "$CPANEL_KNOWN_HOSTS" > "$key_dir/known_hosts"
+          transport="ssh -i $key_dir/key -p $CPANEL_PORT -o BatchMode=yes -o IdentitiesOnly=yes -o UserKnownHostsFile=$key_dir/known_hosts -o StrictHostKeyChecking=yes"
+
+          # Atualiza apenas os arquivos do aplicativo.
+          rsync -r --delay-updates -e "$transport" \
+            index.html style.css app.js report-core.js sw.js manifest.json icons \
+            "$CPANEL_USER@$CPANEL_HOST:${CPANEL_DOCUMENT_ROOT%/}/"
