@@ -39,6 +39,8 @@ button:hover { background: #315675; }
 .message { margin: 0; color: var(--accent); font-size: .82rem; }
 .section-heading { margin-bottom: 14px; }
 .section-heading h2 { margin: 0; }
+.report-mode { display: flex; align-items: center; gap: 8px; }
+.report-mode input { width: 18px; min-height: 18px; margin: 0; accent-color: var(--accent); }
 .report-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 0 0 15px; }
 .report-filters > div:not(.report-filter-actions) { display: grid; gap: 7px; }
 .report-filter-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }

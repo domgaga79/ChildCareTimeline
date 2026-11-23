@@ -15,6 +15,7 @@ const $ = selector => document.querySelector(selector);
 const form = $('#transition-form'), environmentInput = $('#environment');
 const dateInput = $('#date'), timeInput = $('#time'), noteInput = $('#note');
 const message = $('#form-message'), reportPeriod = $('#report-period');
+const nightsOnly = $('#report-nights-only');
 const reportResults = $('#report-results'), reportFromInput = $('#report-from');
 const reportToInput = $('#report-to'), eventList = $('#event-list');
 const stayLimit = $('#stay-limit'), inconsistencyStatus = $('#inconsistency-status');
@@ -146,6 +147,17 @@ function renderInconsistencies(events, start, end) {
   }
   inconsistencyList.hidden = !alerts.length;
 }
+function formatDuration(ms) {
+  const minutes = Math.floor(ms / 60000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor(minutes % 1440 / 60);
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  if (days || hours) parts.push(`${hours}h`);
+  parts.push(`${minutes % 60}min`);
+  return parts.join(' ');
+}
+
 function renderReport(events, now = new Date()) {
   reportResults.replaceChildren();
   inconsistencyList.replaceChildren();
@@ -163,23 +175,41 @@ function renderReport(events, now = new Date()) {
     reportPeriod.textContent = events.length ? 'O período selecionado ainda não começou.' : 'Adicione a primeira transição ou selecione um período.';
     return null;
   }
-  const result = ChildCareReport.calculateNights(events, start, end);
+  const countNights = nightsOnly.checked;
+  const result = countNights
+    ? ChildCareReport.calculateNights(events, start, end)
+    : ChildCareReport.calculateResidence(events, start, end);
+  const total = countNights ? result.total : result.totalMs;
   const rows = ENVIRONMENTS.filter(env => result.totals[env.id])
     .map(env => [env.label, result.totals[env.id]]);
-  if (result.unknown) rows.push(['Sem registro', result.unknown]);
-  reportPeriod.textContent = `${formatDate(new Date(start))} a ${formatDate(new Date(end - 1))} · ${result.total} ${result.total === 1 ? 'noite' : 'noites'}`;
-  for (const [label, nights] of rows) {
-    const pct = nights / result.total * 100;
+  if (countNights && result.unknown) rows.push(['Sem registro', result.unknown]);
+
+  const formatValue = countNights
+    ? nights => `${nights} ${nights === 1 ? 'noite' : 'noites'}`
+    : formatDuration;
+  const reportStart = countNights ? start : result.actualStartMs;
+  const dates = countNights
+    ? [formatDate(new Date(start)), formatDate(new Date(end - 1))]
+    : [
+        from && reportStart === start ? formatDate(new Date(start)) : formatDateTime(new Date(reportStart ?? start)),
+        to ? formatDate(new Date(end - 1)) : formatDateTime(new Date(end))
+      ];
+  reportPeriod.textContent = !countNights && !total
+    ? 'Sem tempo registrado no período selecionado.'
+    : `${dates.join(' a ')} · ${formatValue(total)}`;
+
+  for (const [label, amount] of rows) {
+    const pct = amount / total * 100;
     const row = document.createElement('div'); row.className = 'report-row';
     const name = document.createElement('span'); name.className = 'report-name'; name.textContent = label;
     const value = document.createElement('span'); value.className = 'report-value';
-    value.textContent = `${nights} ${nights === 1 ? 'noite' : 'noites'} (${pct.toFixed(1)}%)`;
+    value.textContent = `${formatValue(amount)} (${pct.toFixed(1)}%)`;
     const bar = document.createElement('div'); bar.className = 'report-percent';
     const fill = document.createElement('span'); fill.style.width = `${pct}%`; bar.append(fill);
     row.append(name, value, bar); reportResults.append(row);
   }
   renderInconsistencies(events, start, end);
-  return { result, rows, start, end };
+  return { countNights, total, rows, dates };
 }
 function render() { const events=readEvents(); renderHistory(events); renderReport(events); }
 function downloadFile(filename, content, type) {
@@ -200,13 +230,16 @@ function exportEventsCsv() {
 }
 function exportReportCsv() {
   const events=readEvents(), range=renderReport(events);
-  if (!range) { backupMessage.textContent='Não há um relatório válido para exportar. Verifique o período selecionado.'; return; }
-  const { result, start, end } = range;
-  const rows = [['Ambiente', 'Noites', 'Percentual', 'De', 'Até']];
-  const dates = [formatDate(new Date(start)), formatDate(new Date(end - 1))];
-  for (const [label, nights] of range.rows)
-    rows.push([label, nights, (nights / result.total * 100).toFixed(2) + '%', ...dates]);
-  rows.push(['Total', result.total, result.total ? '100%' : '0%', ...dates]);
+  if (!range || (!range.countNights && !range.total)) {
+    backupMessage.textContent = 'Não há um relatório válido para exportar. Verifique o período selecionado.';
+    return;
+  }
+  const { countNights, total, dates } = range;
+  const exportValue = amount => countNights ? amount : Math.floor(amount / 60000);
+  const rows = [['Ambiente', countNights ? 'Noites' : 'Duração (minutos)', 'Percentual', 'De', 'Até']];
+  for (const [label, amount] of range.rows)
+    rows.push([label, exportValue(amount), (amount / total * 100).toFixed(2) + '%', ...dates]);
+  rows.push(['Total', exportValue(total), total ? '100%' : '0%', ...dates]);
   downloadFile(`childcaretimeline-relatorio-${localDateTimeParts().date}.csv`,'\uFEFF'+ChildCareReport.toCsv(rows),'text/csv;charset=utf-8');
   backupMessage.textContent='Relatório do período exportado em CSV.';
 }
@@ -307,6 +340,7 @@ form.addEventListener('submit',event=>{
   try {saveEvents(events);noteInput.value='';setDateTimeDefaults();message.textContent='Transição adicionada.';render();}
   catch(error){console.error(error);message.textContent='Não foi possível salvar. Verifique o espaço disponível no navegador.';}
 });
+nightsOnly.addEventListener('change', () => renderReport(readEvents()));
 $('#refresh-report').addEventListener('click',render);
 $('#apply-report-filter').addEventListener('click',render);
 $('#clear-report-filter').addEventListener('click',()=>{reportFromInput.value='';reportToInput.value='';render();});
